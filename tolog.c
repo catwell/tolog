@@ -6,15 +6,23 @@
 FILE *ofile;
 char *fn;
 
+static void die(const char *s) { perror(s); exit(1); }
+
 static void term_handler(int signum) {
-    if (fclose(ofile)) { perror("fclose"); exit(1); }
+    if (fclose(ofile)) { die("fclose"); }
     exit(0);
 }
 
-static void usr1_handler(int signum) {
-    if (fclose(ofile)) { perror("fclose"); exit(1); }
+static void do_open(void) {
     ofile = fopen(fn, "a");
-    if (!ofile) { perror("fopen"); exit(1); }
+    if (!ofile) { die("fopen"); }
+    if (setvbuf(ofile, NULL, _IOLBF, 0)) { die("setvbuf"); }
+}
+
+
+static void usr1_handler(int signum) {
+    if (fclose(ofile)) { die("fclose"); }
+    do_open();
 }
 
 int main(int argc, char **argv) {
@@ -25,7 +33,7 @@ int main(int argc, char **argv) {
     }
 
     fn = argv[1];
-    ofile = fopen(fn, "a");
+    do_open();
 
     struct sigaction sa;
     sigemptyset(&sa.sa_mask);
@@ -38,10 +46,12 @@ int main(int argc, char **argv) {
     sa.sa_flags = SA_RESTART;
     sigaction(SIGUSR1, &sa, NULL);
 
+    if (setvbuf(stdin, NULL, _IONBF, 0)) { die("setvbuf"); }
+
     while ((n = read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
-        if (fwrite(buf, 1, n, ofile) != n) { perror("fwrite"); exit(1); }
+        if (fwrite(buf, 1, n, ofile) != n) { die("fwrite"); }
     }
-    if (ferror(stdin)) { perror("read from stdin"); exit(1); }
+    if (ferror(stdin)) { die("read from stdin"); }
 
     return 0;
 }
